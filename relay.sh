@@ -57,7 +57,7 @@ phase1_planning() {
   PHASE1_PROMPT="Read the skill file at $SKILL_PATH and follow its instructions. Working directory: $WORK_DIR. Help the user create a checkpoint.yaml for their task. If checkpoint.yaml already exists, review it with the user. Template reference: $TEMPLATE_PATH"
 
   claude --session-id "$SESSION_ID" \
-    --permission-mode default \
+    --dangerously-skip-permissions \
     -p "$PHASE1_PROMPT" \
     "$WORK_DIR"
 
@@ -74,7 +74,7 @@ phase1_planning() {
     fi
 
     claude --resume "$SESSION_ID" \
-      --permission-mode default \
+      --dangerously-skip-permissions \
       -p "$user_input" \
       "$WORK_DIR"
   done
