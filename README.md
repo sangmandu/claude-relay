@@ -23,38 +23,27 @@ Phase 1 (Interactive)          Phase 2 (Autonomous)
 
 Context is maintained via `--resume` (same session), and `checkpoint.yaml` tracks progress as a file so you always know where things stand.
 
-## Quick Start
-
-```bash
-# Run in any project directory
-./relay.sh /path/to/your/project
-
-# Phase 1: interactive planning starts
-# Phase 2: autonomous execution follows automatically
-```
-
-If you already have a `checkpoint.yaml` with `planning_done: true`, Phase 1 is skipped.
-
 ## Installation
 
-### Option 1: Symlink to PATH (run from anywhere)
-
 ```bash
+# Clone
+git clone https://github.com/sangmandu/claude-relay.git
+cd claude-relay
+
+# Add to PATH (run from anywhere)
 ln -s $(pwd)/relay.sh /usr/local/bin/claude-relay
-
-# Then use from any directory:
-claude-relay .
-claude-relay ~/projects/my-app
 ```
 
-### Option 2: Global Claude Code skill
-
-Copy the planning skill so it's available in all Claude Code sessions:
+## Usage
 
 ```bash
-mkdir -p ~/.claude/skills
-cp skills/plan-checkpoint.md ~/.claude/skills/
+cd ~/projects/my-app
+claude-relay
 ```
+
+That's it. Phase 1 starts an interactive session to build your checklist, then Phase 2 runs autonomously.
+
+If you already have a `checkpoint.yaml` with `planning_done: true`, Phase 1 is skipped and execution begins immediately.
 
 ## Configuration
 
@@ -66,7 +55,7 @@ Environment variables:
 | `RELAY_MAX_STALE` | 5 | Stop after N iterations with no checkpoint change |
 
 ```bash
-RELAY_MAX_ITER=100 RELAY_MAX_STALE=3 claude-relay ./my-project
+RELAY_MAX_ITER=100 RELAY_MAX_STALE=3 claude-relay
 ```
 
 ## checkpoint.yaml Format
