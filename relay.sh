@@ -250,6 +250,9 @@ SYSPROMPT
   echo "Checkpoint: $CHECKPOINT_FILE"
   echo "Log: $LOG_FILE"
 
+  echo "Session ID: $SESSION_ID"
+  echo "  → To continue: claude --resume $SESSION_ID"
+
   if has_pending_tasks; then
     echo "Status: INCOMPLETE (some tasks remain)"
     exit 1
