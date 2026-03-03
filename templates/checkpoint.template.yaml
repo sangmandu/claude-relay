@@ -1,0 +1,16 @@
+meta:
+  project_name: ""
+  created_at: ""
+  planning_done: false
+  phase: "planning"  # planning | executing | completed
+  stale_count: 0
+  max_stale: 5
+
+tasks: []
+# Example task:
+# - id: analyze_something
+#   title: "Analyze the target files"
+#   status: pending          # pending | in_progress | completed
+#   started_at: null
+#   completed_at: null
+#   notes: ""
