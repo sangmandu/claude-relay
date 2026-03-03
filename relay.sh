@@ -56,6 +56,7 @@ phase1_planning() {
 
   PHASE1_PROMPT="Read the skill file at $SKILL_PATH and follow its instructions. Working directory: $WORK_DIR. Help the user create a checkpoint.yaml for their task. If checkpoint.yaml already exists, review it with the user. Template reference: $TEMPLATE_PATH"
 
+  echo -e "\033[36m━━━ Claude ━━━\033[0m"
   claude --session-id "$SESSION_ID" \
     --dangerously-skip-permissions \
     -p "$PHASE1_PROMPT" \
@@ -63,15 +64,21 @@ phase1_planning() {
 
   while ! is_planning_done; do
     echo ""
-    echo "[relay] checkpoint.yaml not finalized yet. Continuing session..."
-    echo "  (Type your feedback. Claude will resume the same session.)"
-    echo ""
-
-    read -r -p "> " user_input
+    echo "┌─────────────────────────────────────────┐"
+    echo "│  Enter your feedback (or 'done' to skip) │"
+    echo "└─────────────────────────────────────────┘"
+    read -r -p "You > " user_input
 
     if [ -z "$user_input" ]; then
       continue
     fi
+
+    echo ""
+    echo -e "\033[90m━━━ You: $user_input ━━━\033[0m"
+    echo ""
+    echo "[relay] Sending to Claude..."
+    echo ""
+    echo -e "\033[36m━━━ Claude ━━━\033[0m"
 
     claude --resume "$SESSION_ID" \
       --dangerously-skip-permissions \
