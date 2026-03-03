@@ -1,10 +1,19 @@
 {
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "claude-relay",
+  "version": "1.0.0",
+  "description": "Checkpoint-driven autonomous task runner with parallel execution",
+  "owner": {
+    "name": "sangmandu",
+    "email": "sangmandu@users.noreply.github.com"
+  },
   "plugins": [
     {
       "name": "claude-relay",
-      "version": "1.0.0",
       "description": "Checkpoint-driven autonomous task runner with parallel execution",
-      "source": "."
+      "version": "1.0.0",
+      "source": ".",
+      "category": "development"
     }
   ]
 }
