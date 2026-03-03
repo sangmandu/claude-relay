@@ -10,7 +10,24 @@ tasks: []
 # Example task:
 # - id: analyze_something
 #   title: "Analyze the target files"
-#   status: pending          # pending | in_progress | completed
+#   status: pending          # pending | in_progress | completed | failed
+#   depends_on: []           # list of task ids that must complete first
 #   started_at: null
 #   completed_at: null
 #   notes: ""
+#
+# Parallel execution example:
+# - id: task_a
+#   title: "Independent task A"
+#   status: pending
+#   depends_on: []
+#
+# - id: task_b
+#   title: "Independent task B (runs parallel with A)"
+#   status: pending
+#   depends_on: []
+#
+# - id: task_c
+#   title: "Depends on both A and B"
+#   status: pending
+#   depends_on: [task_a, task_b]
