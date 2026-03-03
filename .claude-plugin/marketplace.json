@@ -1,0 +1,10 @@
+{
+  "plugins": [
+    {
+      "name": "claude-relay",
+      "version": "1.0.0",
+      "description": "Checkpoint-driven autonomous task runner with parallel execution",
+      "source": "."
+    }
+  ]
+}
