@@ -2,20 +2,8 @@
   "name": "claude-relay",
   "version": "1.0.0",
   "description": "Parallel task relay system for Claude Code — plan tasks interactively, then execute them concurrently with checkpoint-based orchestration",
-  "skills": "skills/",
-  "commands": "commands/",
-  "agents": "agents/",
-  "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "Write|Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ${CLAUDE_PLUGIN_ROOT}/scripts/checkpoint-guard.sh"
-          }
-        ]
-      }
-    ]
-  }
+  "skills": "./skills/",
+  "commands": "./commands/",
+  "agents": "./agents/",
+  "hooks": "./hooks/hooks.json"
 }
