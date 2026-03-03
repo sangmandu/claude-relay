@@ -8,10 +8,7 @@
       "name": "claude-relay",
       "description": "Checkpoint-driven autonomous task runner with parallel execution",
       "version": "1.2.0",
-      "source": {
-        "source": "github",
-        "repo": "sangmandu/claude-relay"
-      },
+      "source": "./",
       "category": "development"
     }
   ]
