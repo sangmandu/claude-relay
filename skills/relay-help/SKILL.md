@@ -42,6 +42,8 @@ disable-model-invocation: true
 - Tasks with no dependencies run **in parallel** (up to 4 concurrent)
 - Tasks with `depends_on` wait for dependencies to complete first
 - Progress survives interruptions — just run `/relay-run` to resume
+- **Stop Hook**: Claude is automatically prevented from stopping while pending tasks remain. No shell wrapper (`relay.sh`) needed for autonomous execution — the plugin handles it natively
+- **Multiple checkpoints**: If `checkpoint.yaml` exists, you can use `checkpoint_2.yaml` etc. The Stop Hook monitors all `checkpoint*.yaml` files
 
 ## Configuration
 

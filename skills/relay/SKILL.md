@@ -53,8 +53,21 @@ Repeat until all tasks are completed:
 - Keep task execution focused — do exactly what the title says, no more
 - After ALL tasks complete, tell the user "All tasks completed!" and offer to answer follow-up questions
 
+## Stop Hook (Auto-Continue)
+
+This plugin includes a **Stop Hook** — when pending tasks remain in checkpoint files, Claude is automatically prevented from stopping. You don't need to remind Claude to keep going; the hook handles it.
+
+- If all tasks are completed, Claude stops normally
+- If pending tasks remain, the hook blocks the stop and shows the next task
+- The `stop_hook_active` flag provides an escape hatch to force stop if needed
+
+## Multiple Checkpoints
+
+If `checkpoint.yaml` already exists from a previous run, you can create `checkpoint_2.yaml`, `checkpoint_3.yaml`, etc. The Stop Hook scans all `checkpoint*.yaml` files in the working directory.
+
 ## Important
 
 - Use `scripts/checkpoint.py` (at `${CLAUDE_PLUGIN_ROOT}/scripts/checkpoint.py`) if available for safe concurrent checkpoint updates with file locking
 - The Agent tool provides parallelism within a single Claude Code session — no external shell script needed
 - Be autonomous during Phase 2 — don't ask the user for confirmation between tasks
+- The Stop Hook ensures Claude keeps running until all tasks are done — no shell wrapper needed

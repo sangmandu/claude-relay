@@ -43,3 +43,5 @@ Repeat until all tasks are completed:
 - Keep task execution focused — do exactly what the title says, no more
 - After ALL tasks complete, tell the user "All tasks completed!" and offer to answer follow-up questions
 - Be autonomous — don't ask the user for confirmation between tasks
+- The **Stop Hook** automatically prevents Claude from stopping while tasks remain — no manual looping needed
+- Multiple checkpoint files are supported (checkpoint.yaml, checkpoint_2.yaml, etc.)
