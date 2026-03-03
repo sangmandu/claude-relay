@@ -1,6 +1,10 @@
 **/relay_log.txt
 **/checkpoint.yaml
-**/hello.txt
-**/summary.txt
-**/report.md
 .DS_Store
+.relay_session
+**/.relay_session
+logs/
+test-run/
+hello.txt
+world.txt
+summary.txt
