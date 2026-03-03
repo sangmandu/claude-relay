@@ -8,6 +8,7 @@ TEMPLATE_PATH="$SCRIPT_DIR/templates/checkpoint.template.yaml"
 WORK_DIR="${1:-.}"
 CHECKPOINT_FILE="$WORK_DIR/checkpoint.yaml"
 LOG_FILE="$WORK_DIR/relay_log.txt"
+SESSION_FILE="$WORK_DIR/.relay_session"
 MAX_ITER="${RELAY_MAX_ITER:-50}"
 MAX_STALE="${RELAY_MAX_STALE:-5}"
 
@@ -43,6 +44,66 @@ is_planning_done() {
   return 1
 }
 
+save_session() {
+  local phase="$1"
+  local sid="$2"
+  echo "${phase}:${sid}" > "$SESSION_FILE"
+}
+
+load_session() {
+  local phase="$1"
+  if [ -f "$SESSION_FILE" ]; then
+    local saved
+    saved=$(cat "$SESSION_FILE")
+    local saved_phase="${saved%%:*}"
+    local saved_sid="${saved#*:}"
+    if [ "$saved_phase" = "$phase" ] && [ -n "$saved_sid" ]; then
+      echo "$saved_sid"
+      return 0
+    fi
+  fi
+  return 1
+}
+
+run_claude_streaming() {
+  local output_file
+  output_file=$(mktemp)
+
+  "$@" --output-format stream-json 2>&1 | while IFS= read -r line; do
+    echo "$line" >> "$output_file"
+
+    local msg_type
+    msg_type=$(echo "$line" | jq -r '.type // empty' 2>/dev/null) || continue
+
+    case "$msg_type" in
+      assistant)
+        local text
+        text=$(echo "$line" | jq -r '.message.content[]? | select(.type=="text") | .text // empty' 2>/dev/null) || true
+        if [ -n "$text" ]; then
+          echo "$text"
+        fi
+        ;;
+      result)
+        local result_text
+        result_text=$(echo "$line" | jq -r '.result // empty' 2>/dev/null) || true
+        if [ -n "$result_text" ]; then
+          echo "$result_text"
+        fi
+        local cost
+        cost=$(echo "$line" | jq -r '.cost_usd // empty' 2>/dev/null) || true
+        if [ -n "$cost" ]; then
+          echo -e "\033[90m[cost: \$${cost}]\033[0m"
+        fi
+        ;;
+    esac
+  done
+
+  if [ -f "$LOG_FILE" ] && [ -f "$output_file" ]; then
+    cat "$output_file" >> "$LOG_FILE"
+  fi
+  rm -f "$output_file"
+}
+
 # ============================================================
 # Phase 1: Interactive planning with user
 # ============================================================
@@ -51,13 +112,20 @@ phase1_planning() {
   echo "Starting interactive session to build checkpoint pipeline..."
   echo ""
 
-  SESSION_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
-  echo "Session ID: $SESSION_ID"
+  local SESSION_ID
+  if SESSION_ID=$(load_session "phase1"); then
+    echo "Resuming previous Phase 1 session: $SESSION_ID"
+  else
+    SESSION_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
+    save_session "phase1" "$SESSION_ID"
+    echo "New session: $SESSION_ID"
+  fi
 
   PHASE1_PROMPT="Read the skill file at $SKILL_PATH and follow its instructions. Working directory: $WORK_DIR. Help the user create a checkpoint.yaml for their task. If checkpoint.yaml already exists, review it with the user. Template reference: $TEMPLATE_PATH"
 
+  echo ""
   echo -e "\033[36m━━━ Claude ━━━\033[0m"
-  claude --session-id "$SESSION_ID" \
+  run_claude_streaming claude --session-id "$SESSION_ID" \
     --dangerously-skip-permissions \
     -p "$PHASE1_PROMPT" \
     "$WORK_DIR"
@@ -76,11 +144,9 @@ phase1_planning() {
     echo ""
     echo -e "\033[90m━━━ You: $user_input ━━━\033[0m"
     echo ""
-    echo "[relay] Sending to Claude..."
-    echo ""
     echo -e "\033[36m━━━ Claude ━━━\033[0m"
 
-    claude --resume "$SESSION_ID" \
+    run_claude_streaming claude --resume "$SESSION_ID" \
       --dangerously-skip-permissions \
       -p "$user_input" \
       "$WORK_DIR"
@@ -97,8 +163,15 @@ phase1_planning() {
 phase2_execution() {
   echo "━━━ Phase 2: Autonomous Execution ━━━"
 
-  SESSION_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
-  echo "Session ID: $SESSION_ID"
+  local SESSION_ID
+  if SESSION_ID=$(load_session "phase2"); then
+    echo "Resuming previous Phase 2 session: $SESSION_ID"
+  else
+    SESSION_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
+    save_session "phase2" "$SESSION_ID"
+    echo "New session: $SESSION_ID"
+  fi
+
   echo "Log file: $LOG_FILE"
   echo ""
 
@@ -129,30 +202,36 @@ SYSPROMPT
   prev_hash=$(get_checkpoint_hash)
 
   for i in $(seq 1 "$MAX_ITER"); do
-    echo "--- Iteration $i / $MAX_ITER ---"
+    echo ""
+    echo -e "\033[33m--- Iteration $i / $MAX_ITER ---\033[0m"
 
     if ! has_pending_tasks; then
       echo "[relay] All tasks completed!"
       break
     fi
 
-    if [ "$i" -eq 1 ]; then
-      claude --session-id "$SESSION_ID" \
+    local current_task
+    current_task=$(grep -A1 "status: pending\|status: in_progress" "$CHECKPOINT_FILE" | head -1 | sed 's/.*title: "\(.*\)"/\1/' 2>/dev/null || echo "unknown")
+    echo -e "\033[36m  Task: $current_task\033[0m"
+    echo ""
+
+    if [ "$i" -eq 1 ] && ! load_session "phase2" >/dev/null 2>&1; then
+      run_claude_streaming claude --session-id "$SESSION_ID" \
         --system-prompt "$SYSTEM_PROMPT" \
         --dangerously-skip-permissions \
         -p "$RELAY_PROMPT" \
-        "$WORK_DIR" 2>&1 | tee -a "$LOG_FILE"
+        "$WORK_DIR"
     else
-      claude --resume "$SESSION_ID" \
+      run_claude_streaming claude --resume "$SESSION_ID" \
         --dangerously-skip-permissions \
         -p "$RELAY_PROMPT" \
-        "$WORK_DIR" 2>&1 | tee -a "$LOG_FILE"
+        "$WORK_DIR"
     fi
 
     curr_hash=$(get_checkpoint_hash)
     if [ "$curr_hash" = "$prev_hash" ]; then
       stale_count=$((stale_count + 1))
-      echo "[relay] No checkpoint change detected ($stale_count / $MAX_STALE)"
+      echo -e "\033[31m[relay] No checkpoint change detected ($stale_count / $MAX_STALE)\033[0m"
 
       if [ "$stale_count" -ge "$MAX_STALE" ]; then
         echo "[relay] Stale limit reached. Stopping."
@@ -163,7 +242,6 @@ SYSPROMPT
       prev_hash="$curr_hash"
     fi
 
-    echo ""
     sleep 2
   done
 
@@ -177,6 +255,7 @@ SYSPROMPT
     exit 1
   else
     echo "Status: ALL DONE"
+    rm -f "$SESSION_FILE"
   fi
 }
 
