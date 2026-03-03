@@ -1,0 +1,8 @@
+Task `test_phase2` complete. Summary:
+
+- Created `test-run/checkpoint.yaml` with 3 simple tasks (create_hello, create_world, create_summary) and `planning_done: true`
+- Tasks 1 & 2 had no dependencies; task 3 depended on both
+- Ran `relay.sh test-run` — relay correctly skipped Phase 1, executed Phase 2
+- Parallel execution worked: tasks 1 & 2 launched together, task 3 waited for dependencies
+- All 3 tasks completed successfully, checkpoint.yaml fully checked off
+- `summary.txt` contains the expected "Hello from relay\nWorld from relay"

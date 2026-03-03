@@ -1,0 +1,7 @@
+Done. Created `commands/relay-status.md` — a read-only command that reads `checkpoint.yaml` and displays:
+- Project metadata (name, phase, planning status)
+- Task table with status icons (✅🔄⏳❌)
+- Summary counts
+- Ready tasks (pending with all deps completed)
+
+Updated task `create_relay_status_command` to `completed` in checkpoint.yaml.

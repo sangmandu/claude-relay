@@ -1,0 +1,1 @@
+Task `create_orchestrator_agent` is done. Created `agents/relay-orchestrator.md` with proper frontmatter (`name`, `description`) and the full SYSTEM_PROMPT extracted from `relay.sh` `phase2_execution` (lines 321-343). Updated checkpoint.yaml to mark the task completed.

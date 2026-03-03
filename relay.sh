@@ -2,12 +2,12 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")" && pwd)"
-SKILL_PATH="$SCRIPT_DIR/skills/plan-checkpoint.md"
-TEMPLATE_PATH="$SCRIPT_DIR/templates/checkpoint.template.yaml"
+PLUGIN_DIR="$SCRIPT_DIR"
+CHECKPOINT_PY="$SCRIPT_DIR/scripts/checkpoint.py"
+ORCHESTRATOR_AGENT="$SCRIPT_DIR/agents/relay-orchestrator.md"
 
 WORK_DIR="${1:-.}"
 CHECKPOINT_FILE="$WORK_DIR/checkpoint.yaml"
-LOCK_FILE="$WORK_DIR/.checkpoint.lock"
 LOG_DIR="$WORK_DIR/logs"
 LOG_FILE="$WORK_DIR/relay_log.txt"
 SESSION_FILE="$WORK_DIR/.relay_session"
@@ -27,17 +27,11 @@ echo "Max parallel: $MAX_PARALLEL"
 echo ""
 
 # ============================================================
-# Checkpoint helpers (with file locking)
+# Checkpoint helpers (delegating to scripts/checkpoint.py)
 # ============================================================
 
-locked_python() {
-  if command -v flock >/dev/null 2>&1; then
-    flock "$LOCK_FILE" python3 -c "$1"
-  else
-    while ! mkdir "$LOCK_FILE.d" 2>/dev/null; do sleep 0.1; done
-    python3 -c "$1"
-    rmdir "$LOCK_FILE.d" 2>/dev/null || true
-  fi
+ckpt() {
+  python3 "$CHECKPOINT_PY" -f "$CHECKPOINT_FILE" "$@"
 }
 
 get_checkpoint_hash() {
@@ -49,78 +43,23 @@ get_checkpoint_hash() {
 }
 
 has_pending_tasks() {
-  if [ -f "$CHECKPOINT_FILE" ]; then
-    grep -q "status: pending\|status: in_progress" "$CHECKPOINT_FILE"
-    return $?
-  fi
-  return 1
+  ckpt has_pending
 }
 
 is_planning_done() {
-  if [ -f "$CHECKPOINT_FILE" ]; then
-    grep -q "planning_done: true" "$CHECKPOINT_FILE"
-    return $?
-  fi
-  return 1
+  ckpt is_planning_done
 }
 
 get_ready_tasks() {
-  locked_python "
-import yaml, sys, json
-
-with open('$CHECKPOINT_FILE') as f:
-    data = yaml.safe_load(f)
-
-tasks = data.get('tasks', [])
-completed = {t['id'] for t in tasks if t.get('status') == 'completed'}
-in_progress = {t['id'] for t in tasks if t.get('status') == 'in_progress'}
-
-ready = []
-for t in tasks:
-    if t.get('status') != 'pending':
-        continue
-    deps = t.get('depends_on', [])
-    if all(d in completed for d in deps):
-        ready.append(t['id'])
-
-print(json.dumps(ready))
-"
+  ckpt get_ready_tasks
 }
 
 get_task_field() {
-  local task_id="$1"
-  local field="$2"
-  locked_python "
-import yaml
-with open('$CHECKPOINT_FILE') as f:
-    data = yaml.safe_load(f)
-for t in data.get('tasks', []):
-    if t['id'] == '$task_id':
-        print(t.get('$field', ''))
-        break
-"
+  ckpt get_task_field "$1" "$2"
 }
 
 update_task_status() {
-  local task_id="$1"
-  local new_status="$2"
-  local timestamp
-  timestamp="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-  locked_python "
-import yaml
-with open('$CHECKPOINT_FILE') as f:
-    data = yaml.safe_load(f)
-for t in data.get('tasks', []):
-    if t['id'] == '$task_id':
-        t['status'] = '$new_status'
-        if '$new_status' == 'in_progress':
-            t['started_at'] = '$timestamp'
-        elif '$new_status' == 'completed':
-            t['completed_at'] = '$timestamp'
-        break
-with open('$CHECKPOINT_FILE', 'w') as f:
-    yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
-"
+  ckpt update_task_status "$1" "$2"
 }
 
 save_session() {
@@ -184,11 +123,11 @@ run_claude_streaming() {
 }
 
 # ============================================================
-# Phase 1: Interactive planning with user
+# Phase 1: Interactive planning with plugin
 # ============================================================
 phase1_planning() {
   echo "━━━ Phase 1: Planning (interactive) ━━━"
-  echo "Starting interactive session to build checkpoint pipeline..."
+  echo "Use /relay-plan to build your checkpoint pipeline."
   echo ""
 
   local SESSION_ID
@@ -200,11 +139,12 @@ phase1_planning() {
     echo "New session: $SESSION_ID"
   fi
 
-  PHASE1_PROMPT="Read the skill file at $SKILL_PATH and follow its instructions. Working directory: $WORK_DIR. Help the user create a checkpoint.yaml for their task. If checkpoint.yaml already exists, review it with the user. Template reference: $TEMPLATE_PATH"
+  local PHASE1_PROMPT="You have the relay plugin loaded. The user can use /relay-plan to build a checkpoint pipeline. Working directory: $WORK_DIR. If checkpoint.yaml already exists, review it with the user."
 
   echo ""
   echo -e "\033[36m━━━ Claude ━━━\033[0m"
   run_claude_streaming claude --session-id "$SESSION_ID" \
+    --plugin-dir "$PLUGIN_DIR" \
     --dangerously-skip-permissions \
     -p "$PHASE1_PROMPT" \
     "$WORK_DIR"
@@ -237,7 +177,7 @@ phase1_planning() {
 }
 
 # ============================================================
-# Run a single task (used by both serial and parallel modes)
+# Run a single task via worker with plugin
 # ============================================================
 run_single_task() {
   local task_id="$1"
@@ -261,7 +201,8 @@ Follow these rules:
 5. Keep work focused on exactly what the task describes"
 
   local exit_code=0
-  claude --dangerously-skip-permissions \
+  claude --plugin-dir "$PLUGIN_DIR" \
+    --dangerously-skip-permissions \
     -p "$TASK_PROMPT" \
     "$WORK_DIR" > "$task_log" 2>&1 || exit_code=$?
 
@@ -301,6 +242,29 @@ collect_batch_summary() {
 }
 
 # ============================================================
+# Load orchestrator system prompt from agent definition
+# ============================================================
+load_system_prompt() {
+  python3 -c "
+import sys, yaml
+
+content = open('$ORCHESTRATOR_AGENT').read()
+if content.startswith('---'):
+    parts = content.split('---', 2)
+    if len(parts) >= 3:
+        try:
+            yaml.safe_load(parts[1])
+            print(parts[2].strip())
+        except yaml.YAMLError:
+            print(content)
+    else:
+        print(content)
+else:
+    print(content)
+"
+}
+
+# ============================================================
 # Phase 2: Autonomous execution loop (with parallel support)
 # ============================================================
 phase2_execution() {
@@ -318,29 +282,8 @@ phase2_execution() {
   echo "Log dir: $LOG_DIR/"
   echo ""
 
-  read -r -d '' SYSTEM_PROMPT << 'SYSPROMPT' || true
-You are the orchestrator of an autonomous relay pipeline.
-The user has fully delegated this work to you. Messages you receive are system-level
-triggers from the relay runner, not a human typing in real-time.
-
-## Your role
-- You are the MAIN SESSION that maintains full context of the project
-- Worker sessions handle individual tasks in parallel and report back
-- After each batch, you receive a summary of what was completed
-- You accumulate knowledge across all tasks for continuity
-
-## Your protocol
-1. Read checkpoint.yaml to understand current state
-2. When you receive a batch completion summary, acknowledge the results
-3. Note any important findings or context that future tasks might need
-4. If a single task needs to run (no parallelism), execute it directly yourself
-5. Always re-read checkpoint.yaml at the start of each turn
-
-## Important
-- Keep your responses concise — focus on key observations
-- You are the persistent memory of this pipeline
-- After all tasks complete, you remain available for the user to ask follow-up questions
-SYSPROMPT
+  local SYSTEM_PROMPT
+  SYSTEM_PROMPT="$(load_system_prompt)"
 
   local first_run=true
   stale_count=0
@@ -385,7 +328,6 @@ print(' '.join(ids))
     local launch_count
     launch_count=$(echo $task_ids | wc -w | tr -d ' ')
 
-    # Single task: run directly in main session for context continuity
     if [ "$launch_count" -eq 1 ]; then
       local tid="$task_ids"
       local title
@@ -399,6 +341,7 @@ print(' '.join(ids))
       if [ "$first_run" = true ]; then
         run_claude_streaming claude --session-id "$SESSION_ID" \
           --system-prompt "$SYSTEM_PROMPT" \
+          --plugin-dir "$PLUGIN_DIR" \
           --dangerously-skip-permissions \
           -p "$TASK_PROMPT" \
           "$WORK_DIR"
@@ -419,7 +362,6 @@ print(' '.join(ids))
         update_task_status "$tid" "completed"
       fi
 
-    # Multiple tasks: dispatch workers in parallel, then sync to main session
     else
       echo -e "\033[35m  Parallel batch: $ready_count ready, launching $launch_count tasks\033[0m"
 
@@ -441,7 +383,6 @@ print(' '.join(ids))
         fi
       done
 
-      # Feed batch results back to main session for context continuity
       local batch_summary
       batch_summary="$(collect_batch_summary "$task_ids")"
 
@@ -454,6 +395,7 @@ Re-read checkpoint.yaml to see current state. Briefly note any key findings from
       if [ "$first_run" = true ]; then
         run_claude_streaming claude --session-id "$SESSION_ID" \
           --system-prompt "$SYSTEM_PROMPT" \
+          --plugin-dir "$PLUGIN_DIR" \
           --dangerously-skip-permissions \
           -p "$SYNC_PROMPT" \
           "$WORK_DIR"

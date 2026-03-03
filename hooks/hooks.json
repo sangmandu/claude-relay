@@ -1,0 +1,11 @@
+{
+  "hooks": [
+    {
+      "type": "PostToolUse",
+      "matcher": {
+        "tool_name": "Write|Edit"
+      },
+      "command": "bash ${CLAUDE_PLUGIN_ROOT}/scripts/checkpoint-guard.sh"
+    }
+  ]
+}

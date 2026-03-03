@@ -1,0 +1,4 @@
+Task `create_checkpoint_guard` is complete. Created:
+
+- **hooks/hooks.json** — PostToolUse hook that triggers on Write|Edit tool calls
+- **scripts/checkpoint-guard.sh** — Validates checkpoint.yaml YAML structure (checks root is a mapping, required `meta`/`tasks` keys exist, each task has `id`/`title`/`status`, and status values are valid). Only runs if the file was modified within the last 5 seconds to avoid unnecessary checks.

@@ -1,0 +1,21 @@
+{
+  "name": "claude-relay",
+  "version": "1.0.0",
+  "description": "Parallel task relay system for Claude Code — plan tasks interactively, then execute them concurrently with checkpoint-based orchestration",
+  "skills": [
+    "skills/relay-plan/SKILL.md"
+  ],
+  "commands": [
+    "commands/relay-task.md",
+    "commands/relay-status.md"
+  ],
+  "agents": [
+    "agents/relay-orchestrator.md"
+  ],
+  "hooks": [
+    "hooks/hooks.json"
+  ],
+  "scripts": [
+    "scripts/checkpoint.py"
+  ]
+}

@@ -1,0 +1,1 @@
+Task complete. Created `commands/relay-task.md` with the worker behavior prompt extracted from `relay.sh`'s `run_single_task` function. The prompt includes frontmatter with `task_id`, `task_title`, and `work_dir` arguments, and the 5 rules that govern autonomous task execution. Updated checkpoint.yaml to mark `create_relay_task_command` as completed.

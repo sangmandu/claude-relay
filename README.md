@@ -18,15 +18,16 @@ Phase 1 (Interactive)          Phase 2 (Autonomous)
                                └──────────────────────────────────┘
 ```
 
-- **Phase 1**: You and Claude collaboratively build a task checklist (`checkpoint.yaml`)
+- **Phase 1**: You and Claude collaboratively build a task checklist (`checkpoint.yaml`) using the `/relay-plan` skill
 - **Phase 2**: Claude autonomously works through tasks, running independent ones **in parallel**, updating yaml after each completion
 
 `checkpoint.yaml` tracks progress as a file so you always know where things stand.
 
 ## Installation
 
+### Option A: Standalone script
+
 ```bash
-# Clone
 git clone https://github.com/sangmandu/claude-relay.git
 cd claude-relay
 
@@ -34,7 +35,19 @@ cd claude-relay
 ln -s $(pwd)/relay.sh /usr/local/bin/claude-relay
 ```
 
+### Option B: Claude Code plugin (--plugin-dir)
+
+Use the plugin directly with any `claude` invocation:
+
+```bash
+claude --plugin-dir /path/to/claude-relay
+```
+
+This loads the relay skills, commands, and hooks into your Claude Code session without needing `relay.sh`.
+
 ## Usage
+
+### With relay.sh (full orchestration)
 
 ```bash
 cd ~/projects/my-app
@@ -44,6 +57,15 @@ claude-relay
 That's it. Phase 1 starts an interactive session to build your checklist, then Phase 2 runs autonomously.
 
 If you already have a `checkpoint.yaml` with `planning_done: true`, Phase 1 is skipped and execution begins immediately.
+
+### Plugin commands
+
+When loaded as a plugin (via `relay.sh` or `--plugin-dir`), the following commands are available:
+
+| Command | Description |
+|---------|-------------|
+| `/relay-plan` | Interactive planning skill — guides you through building a `checkpoint.yaml` with tasks, dependencies, and proper structure |
+| `/relay-status` | Displays a formatted summary of all tasks in `checkpoint.yaml` and their current statuses |
 
 ## Configuration
 
@@ -144,9 +166,22 @@ logs/
 
 ```
 claude-relay/
-├── relay.sh                      # Main runner script
+├── relay.sh                          # Main runner script (orchestrator)
+├── .claude-plugin/
+│   └── plugin.json                   # Plugin manifest
 ├── skills/
-│   └── plan-checkpoint.md        # Phase 1 planning skill
+│   └── relay-plan/
+│       └── SKILL.md                  # /relay-plan — interactive planning skill
+├── commands/
+│   ├── relay-task.md                 # Worker behavior prompt for parallel sessions
+│   └── relay-status.md              # /relay-status — checkpoint status display
+├── agents/
+│   └── relay-orchestrator.md         # Phase 2 orchestrator agent definition
+├── hooks/
+│   └── hooks.json                    # PostToolUse hook for checkpoint validation
+├── scripts/
+│   ├── checkpoint.py                 # Checkpoint CLI (get tasks, update status, etc.)
+│   └── checkpoint-guard.sh           # YAML structure validator
 └── templates/
-    └── checkpoint.template.yaml  # Reference template
+    └── checkpoint.template.yaml      # Reference template
 ```

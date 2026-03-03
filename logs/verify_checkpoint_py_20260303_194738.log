@@ -1,0 +1,1 @@
+Task `verify_checkpoint_py` is now marked as completed. All 5 checkpoint.py CLI commands work correctly against the live checkpoint.yaml.

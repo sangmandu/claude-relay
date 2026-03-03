@@ -1,0 +1,6 @@
+Task `update_readme` 완료했습니다, 형님. README.md에 다음 내용을 반영했습니다:
+
+- **Installation**: `--plugin-dir` 방식 추가 (Option B)
+- **Commands**: `/relay-plan`, `/relay-status` 커맨드 문서화 (테이블 형태)
+- **relay.sh usage**: 기존 내용 유지
+- **Project structure**: 전체 플러그인 구조 반영 (`.claude-plugin/`, `skills/`, `commands/`, `agents/`, `hooks/`, `scripts/`)

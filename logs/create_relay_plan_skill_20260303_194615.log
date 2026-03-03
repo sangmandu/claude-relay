@@ -1,0 +1,6 @@
+Task `create_relay_plan_skill` 완료했습니다 형님.
+
+**수행한 작업:**
+- `skills/relay-plan/SKILL.md` 생성 — frontmatter에 `name: relay-plan`, `description` 포함
+- 기존 `skills/plan-checkpoint.md`의 모든 내용 보존 (verification rule, parallelism tips, completion signal 등)
+- `checkpoint.yaml`에서 해당 태스크 상태를 `completed`로 업데이트

@@ -1,0 +1,1 @@
+Done. Created `scripts/checkpoint.py` with all 5 CLI commands (`get_ready_tasks`, `get_task_field`, `update_task_status`, `has_pending`, `is_planning_done`) extracted from the inline Python heredocs in `relay.sh`. The module uses `fcntl.flock` for file locking and is a standalone CLI with `argparse`. Task marked as completed.

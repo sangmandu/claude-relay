@@ -1,3 +1,8 @@
+---
+name: relay-plan
+description: Collaboratively build a checkpoint.yaml pipeline for autonomous task execution with parallel task support
+---
+
 <plan-checkpoint>
 
 You are helping the user create a checkpoint pipeline for an autonomous task.
