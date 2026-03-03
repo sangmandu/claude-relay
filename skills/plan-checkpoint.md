@@ -40,6 +40,7 @@ tasks:
 - Tasks should be ordered by dependency (earlier tasks inform later ones)
 - Include investigation/analysis tasks before implementation tasks
 - Task titles should be specific enough that a fresh Claude session can understand what to do just by reading it
+- **The final task must always be writing a report** (REPORT.md) that summarizes: what was done, what was found, key results, and any remaining issues
 - When the user approves the final list, set `meta.planning_done: true` and `meta.phase: "executing"`
 
 ## Completion Signal
