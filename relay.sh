@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")" && pwd)"
 SKILL_PATH="$SCRIPT_DIR/skills/plan-checkpoint.md"
 TEMPLATE_PATH="$SCRIPT_DIR/templates/checkpoint.template.yaml"
 
