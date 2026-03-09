@@ -1,16 +1,23 @@
 ---
 name: relay-plan
-description: Collaboratively build a checkpoint.yaml pipeline for autonomous task execution with parallel task support
+description: Collaboratively build a checkpoint pipeline for autonomous task execution with parallel task support
 ---
 
 <plan-checkpoint>
 
 You are helping the user create a checkpoint pipeline for an autonomous task.
 
+## Step 0: Determine Checkpoint Filename
+
+1. **Scan** for all `checkpoint-*.yaml` files in the current working directory
+2. **If any exist**: List them with status summary. Ask if the user wants to edit an existing one or create a new one.
+3. **For a new checkpoint**: Ask what they want to accomplish, then generate a filename: `checkpoint-{kebab-case-description}.yaml` (e.g., `checkpoint-db-migration-v2.yaml`). Keep it short (3-5 words).
+4. Never use plain `checkpoint.yaml` — always include a description.
+
 ## Your Role
 
 The user has a task they want to fully delegate to Claude Code running in a loop.
-Your job is to **collaboratively build a checkpoint.yaml** that defines every step needed.
+Your job is to **collaboratively build a checkpoint file** that defines every step needed.
 
 ## Process
 
@@ -18,9 +25,9 @@ Your job is to **collaboratively build a checkpoint.yaml** that defines every st
 2. **Break it down**: Propose a phased task list (investigation → analysis → implementation → verification).
 3. **Identify parallelism**: Tasks with no dependencies on each other should have the same (or no) `depends_on` — the runner will execute them concurrently.
 4. **Refine together**: The user may add, remove, or reorder tasks. Iterate until they're satisfied.
-5. **Write checkpoint.yaml**: When the user confirms, generate the final checkpoint.yaml in the working directory.
+5. **Write the checkpoint file**: When the user confirms, generate the file with the chosen filename.
 
-## checkpoint.yaml Format
+## Checkpoint File Format
 
 ```yaml
 meta:
@@ -62,7 +69,7 @@ When breaking down tasks, actively look for opportunities to parallelize:
 
 ## Completion Signal
 
-When checkpoint.yaml is written with `planning_done: true`, tell the user:
-"Checkpoint pipeline is ready. Run phase 2 to begin autonomous execution."
+When the checkpoint file is written with `planning_done: true`, tell the user:
+"Checkpoint pipeline is ready. Run `/relay-run` to begin autonomous execution, or `/relay` for the full flow."
 
 </plan-checkpoint>

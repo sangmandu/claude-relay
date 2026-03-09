@@ -7,7 +7,31 @@ CHECKPOINT_PY="$SCRIPT_DIR/scripts/checkpoint.py"
 ORCHESTRATOR_AGENT="$SCRIPT_DIR/agents/relay-orchestrator.md"
 
 WORK_DIR="${1:-.}"
-CHECKPOINT_FILE="$WORK_DIR/checkpoint.yaml"
+CHECKPOINT_NAME="${2:-}"
+
+if [ -z "$CHECKPOINT_NAME" ]; then
+  existing=($(ls "$WORK_DIR"/checkpoint-*.yaml 2>/dev/null))
+  if [ ${#existing[@]} -eq 1 ]; then
+    CHECKPOINT_FILE="${existing[0]}"
+    echo "Using existing checkpoint: $(basename "$CHECKPOINT_FILE")"
+  elif [ ${#existing[@]} -gt 1 ]; then
+    echo "Multiple checkpoint files found:"
+    for i in "${!existing[@]}"; do
+      echo "  [$((i+1))] $(basename "${existing[$i]}")"
+    done
+    read -r -p "Select (number) or enter a new name: " selection
+    if [[ "$selection" =~ ^[0-9]+$ ]] && [ "$selection" -ge 1 ] && [ "$selection" -le ${#existing[@]} ]; then
+      CHECKPOINT_FILE="${existing[$((selection-1))]}"
+    else
+      CHECKPOINT_FILE="$WORK_DIR/checkpoint-${selection}.yaml"
+    fi
+  else
+    read -r -p "Describe this task (short, kebab-case): " task_name
+    CHECKPOINT_FILE="$WORK_DIR/checkpoint-${task_name}.yaml"
+  fi
+else
+  CHECKPOINT_FILE="$WORK_DIR/checkpoint-${CHECKPOINT_NAME}.yaml"
+fi
 LOG_DIR="$WORK_DIR/logs"
 LOG_FILE="$WORK_DIR/relay_log.txt"
 SESSION_FILE="$WORK_DIR/.relay_session"

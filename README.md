@@ -7,21 +7,60 @@ Define a checklist with dependencies, let Claude work through it — running ind
 ## How it works
 
 ```
-Phase 1 (Interactive)          Phase 2 (Autonomous)
-┌─────────────────────┐       ┌──────────────────────────────────┐
-│ User ↔ Claude        │       │ Loop:                            │
-│ Build checkpoint.yaml│──────▶│  1. Read checkpoint.yaml         │
-│ together             │       │  2. Find all ready tasks         │
-└─────────────────────┘       │  3. Launch them in parallel      │
-                               │  4. Wait, mark [x], save yaml   │
-                               │  5. Repeat until all [x]         │
-                               └──────────────────────────────────┘
+Phase 0 (Session Init)        Phase 1 (Interactive)          Phase 2 (Autonomous)
+┌─────────────────────┐       ┌─────────────────────┐       ┌──────────────────────────────────┐
+│ Scan checkpoint-*    │       │ User ↔ Claude        │       │ Loop:                            │
+│ Resume or new task?  │──────▶│ Build checkpoint     │──────▶│  1. Read checkpoint file          │
+│ Name the checkpoint  │       │ together             │       │  2. Find all ready tasks         │
+└─────────────────────┘       └─────────────────────┘       │  3. Launch them in parallel      │
+                                                             │  4. Wait, mark [x], save yaml   │
+                                                             │  5. Repeat until all [x]         │
+                                                             └──────────────────────────────────┘
 ```
 
-- **Phase 1**: You and Claude collaboratively build a task checklist (`checkpoint.yaml`) using the `/relay-plan` skill
-- **Phase 2**: Claude autonomously works through tasks, running independent ones **in parallel**, updating yaml after each completion
+- **Phase 0**: Scan existing checkpoint files, decide to resume or start fresh, name the checkpoint
+- **Phase 1**: Collaboratively build a task checklist using the `/relay-plan` skill
+- **Phase 2**: Claude autonomously works through tasks, running independent ones **in parallel**
 
-`checkpoint.yaml` tracks progress as a file so you always know where things stand.
+## Features
+
+### Named Checkpoints (Session Isolation)
+
+Each relay session gets its own named checkpoint file:
+
+```
+checkpoint-onboarding-refactor.yaml
+checkpoint-stock-plugin-v2.yaml
+checkpoint-db-migration.yaml
+```
+
+This solves two critical problems:
+- **No accidental overwrites**: Starting a new task won't clobber an in-progress checkpoint from a different task
+- **Multiple relays in parallel**: Run separate relay sessions in the same directory without conflict — each operates on its own file
+
+When you start `/relay`, it scans for existing `checkpoint-*.yaml` files and asks whether to resume one or create a new session.
+
+### Parallel Execution with File Locking
+
+Tasks with satisfied dependencies run **concurrently** (up to `RELAY_MAX_PARALLEL`). File-level locking (`fcntl.flock`) prevents race conditions when multiple workers update the checkpoint simultaneously.
+
+### Stop Hook (Auto-Continue)
+
+A built-in Stop Hook prevents Claude from stopping while tasks remain. The hook scans all `checkpoint-*.yaml` files — works across multiple concurrent relay sessions.
+
+### Stale Detection
+
+If the checkpoint doesn't change for `RELAY_MAX_STALE` consecutive iterations, the runner assumes something is stuck and stops.
+
+## vs. claude-ralph
+
+| | claude-relay | claude-ralph |
+|---|---|---|
+| Parallelism | Concurrent tasks via Agent tool | Sequential only |
+| Progress tracking | YAML checkpoint file (inspectable, resumable) | In-memory loop |
+| Multi-session | Named checkpoints, multiple relays in same dir | Single loop per session |
+| Resume | Pick up where you left off from any session | Start over |
+| Planning | Collaborative Phase 1 with dependency graph | Ad-hoc |
 
 ## Installation
 
@@ -37,8 +76,6 @@ ln -s $(pwd)/relay.sh /usr/local/bin/claude-relay
 
 ### Option B: Claude Code plugin (--plugin-dir)
 
-Use the plugin directly with any `claude` invocation:
-
 ```bash
 claude --plugin-dir /path/to/claude-relay
 ```
@@ -47,39 +84,35 @@ This loads the relay skills, commands, and hooks into your Claude Code session w
 
 ## Usage
 
-### With relay.sh (full orchestration)
+### With relay.sh
 
 ```bash
 cd ~/projects/my-app
+
+# Interactive — scans existing checkpoints, asks to resume or start new
 claude-relay
+
+# Direct — specify checkpoint name
+claude-relay . my-task-name
+# → uses checkpoint-my-task-name.yaml
 ```
 
-That's it. Phase 1 starts an interactive session to build your checklist, then Phase 2 runs autonomously.
+### Plugin skills
 
-If you already have a `checkpoint.yaml` with `planning_done: true`, Phase 1 is skipped and execution begins immediately.
-
-### Plugin commands
-
-When loaded as a plugin (via `relay.sh` or `--plugin-dir`), the following commands are available:
-
-| Command | Description |
-|---------|-------------|
-| `/relay-plan` | Interactive planning skill — guides you through building a `checkpoint.yaml` with tasks, dependencies, and proper structure |
-| `/relay-status` | Displays a formatted summary of all tasks in `checkpoint.yaml` and their current statuses |
+| Skill | Description |
+|-------|-------------|
+| `/relay` | Full pipeline — Phase 0 → 1 → 2 |
+| `/relay-plan` | Build a checkpoint file collaboratively |
+| `/relay-run` | Execute pending tasks from an existing checkpoint |
+| `/relay-status` | Show status of all checkpoint files |
 
 ## Configuration
-
-Environment variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `RELAY_MAX_ITER` | 50 | Maximum loop iterations |
 | `RELAY_MAX_STALE` | 5 | Stop after N iterations with no checkpoint change |
 | `RELAY_MAX_PARALLEL` | 4 | Maximum concurrent tasks per iteration |
-
-```bash
-RELAY_MAX_ITER=100 RELAY_MAX_PARALLEL=6 claude-relay
-```
 
 ## checkpoint.yaml Format
 
@@ -105,83 +138,52 @@ tasks:
     title: "Fix the null pointer bug in parser.py"
     status: pending
     depends_on: [investigate_problem]
-    started_at: null
-    completed_at: null
-    notes: ""
 ```
 
-Task status flow: `pending` → `in_progress` → `completed`
+Task status flow: `pending` → `in_progress` → `completed` / `failed`
 
 ## Parallel Execution
-
-Tasks with satisfied dependencies (or no dependencies) run **concurrently**, up to `RELAY_MAX_PARALLEL` at a time.
 
 ```yaml
 tasks:
   # These three run in parallel (no dependencies)
   - id: analyze_frontend
-    title: "Analyze frontend code"
     depends_on: []
-
   - id: analyze_backend
-    title: "Analyze backend code"
     depends_on: []
-
   - id: analyze_database
-    title: "Analyze database schema"
     depends_on: []
 
-  # This waits for all three to finish
+  # This waits for all three
   - id: write_report
-    title: "Write combined analysis report"
     depends_on: [analyze_frontend, analyze_backend, analyze_database]
 ```
 
 Each parallel task gets its own Claude session and log file in `logs/`.
 
-File locking prevents race conditions when multiple tasks update `checkpoint.yaml` simultaneously.
-
-## Stale Detection
-
-If `checkpoint.yaml` doesn't change for `RELAY_MAX_STALE` consecutive iterations, the runner assumes something is stuck and stops.
-
-## Logs
-
-Each task gets an individual log file:
-
-```
-logs/
-├── analyze_frontend_20260303_120100.log
-├── analyze_backend_20260303_120100.log
-└── write_report_20260303_120230.log
-```
-
 ## Safety
 
 - Phase 2 uses `--dangerously-skip-permissions` for unattended operation
 - Run in a sandboxed environment (Docker, VM) for untrusted tasks
-- Always review `checkpoint.yaml` and `logs/` after completion
+- Always review checkpoint files and `logs/` after completion
 
 ## Project Structure
 
 ```
 claude-relay/
-├── relay.sh                          # Main runner script (orchestrator)
-├── .claude-plugin/
-│   └── plugin.json                   # Plugin manifest
+├── relay.sh                          # Main runner script
 ├── skills/
-│   └── relay-plan/
-│       └── SKILL.md                  # /relay-plan — interactive planning skill
+│   ├── relay/SKILL.md                # /relay — full pipeline
+│   ├── relay-plan/SKILL.md           # /relay-plan — interactive planning
+│   └── relay-run/SKILL.md            # /relay-run — execution only
 ├── commands/
-│   ├── relay-task.md                 # Worker behavior prompt for parallel sessions
-│   └── relay-status.md              # /relay-status — checkpoint status display
+│   ├── relay-task.md                 # Worker behavior prompt
+│   └── relay-status.md               # /relay-status — status display
 ├── agents/
-│   └── relay-orchestrator.md         # Phase 2 orchestrator agent definition
-├── hooks/
-│   └── hooks.json                    # PostToolUse hook for checkpoint validation
+│   └── relay-orchestrator.md         # Phase 2 orchestrator agent
 ├── scripts/
-│   ├── checkpoint.py                 # Checkpoint CLI (get tasks, update status, etc.)
-│   └── checkpoint-guard.sh           # YAML structure validator
+│   ├── checkpoint.py                 # Checkpoint CLI with file locking
+│   └── relay-stop.sh                 # Stop hook — prevents early exit
 └── templates/
-    └── checkpoint.template.yaml      # Reference template
+    └── checkpoint.template.yaml
 ```
